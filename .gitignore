@@ -1,0 +1,4 @@
+# Trade files never go in this public repo. The only CSV that may be committed is the template.
+*.csv
+!template.csv
+.DS_Store

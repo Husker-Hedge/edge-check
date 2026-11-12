@@ -5,28 +5,318 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Edge Check</title>
 <style>
-  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; background: #f4f5f2; color: #16191d; line-height: 1.5; }
-  main { max-width: 640px; margin: 0 auto; padding: 48px 20px; }
-  h1 { margin: 0 0 8px; font-size: 34px; }
-  .tag { color: #5a6270; margin: 0 0 28px; }
-  .box { background: #fff; border: 1px solid #d9dcd6; border-radius: 12px; padding: 4px 20px; }
-  .lock { color: #17734c; font-size: 14px; margin-top: 20px; }
-  @media (prefers-color-scheme: dark) {
-    body { background: #121418; color: #e8ebf0; }
-    .box { background: #1b1f26; border-color: #2c333e; }
-    .tag { color: #9aa3b2; }
-    .lock { color: #5fd39c; }
+  :root {
+    --bg: #f4f5f2; --panel: #fff; --fg: #16191d; --muted: #5a6270; --line: #d9dcd6; --soft: #eceee9;
+    --accent: #2346c8; --ok: #17734c; --ok-bg: #e6f2ec; --bad: #b3261e; --warn: #7a4800; --warn-bg: #fbf0dc;
   }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #121418; --panel: #1b1f26; --fg: #e8ebf0; --muted: #9aa3b2; --line: #2c333e; --soft: #232831;
+      --accent: #8aa2f5; --ok: #5fd39c; --ok-bg: #16302a; --bad: #f08a80; --warn: #f2c46d; --warn-bg: #33291a;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; background: var(--bg); color: var(--fg); line-height: 1.5; }
+  main { max-width: 960px; margin: 0 auto; padding: 32px 16px 64px; display: flex; flex-direction: column; gap: 20px; }
+  h1 { margin: 0; font-size: 34px; }
+  h2 { margin: 0 0 6px; font-size: 19px; }
+  p { margin: 0 0 10px; }
+  .tag { color: var(--muted); margin: 4px 0 0; }
+  .lock { color: var(--ok); font-size: 14px; margin-top: 6px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; }
+  .muted { color: var(--muted); }
+  .small { font-size: 14px; }
+  a { color: var(--accent); }
+  .btn { display: inline-flex; align-items: center; min-height: 44px; padding: 0 18px; border-radius: 8px; border: 0;
+         background: var(--fg); color: var(--bg); font: inherit; font-weight: 600; cursor: pointer; text-decoration: none; }
+  .btn.secondary { background: transparent; color: var(--fg); border: 1px solid var(--line); font-weight: 500; }
+  .drop { border: 2px dashed var(--line); border-radius: 12px; padding: 22px 16px; display: flex; flex-wrap: wrap; gap: 12px;
+          align-items: center; justify-content: center; text-align: center; margin: 10px 0; }
+  .drop.over { border-color: var(--accent); background: var(--soft); }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  input[type=file]:focus-visible + .btn, .btn:focus-visible, select:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .status { padding: 10px 12px; border-radius: 8px; background: var(--ok-bg); color: var(--ok); font-size: 14px; margin: 8px 0 0; }
+  .status.bad { background: var(--warn-bg); color: var(--warn); }
+  .fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; margin: 12px 0 16px; }
+  .field label { display: flex; gap: 8px; align-items: baseline; font-weight: 600; margin-bottom: 4px; }
+  .req { font-size: 12px; font-weight: 600; color: var(--warn); background: var(--warn-bg); padding: 1px 7px; border-radius: 999px; }
+  .opt { font-size: 12px; font-weight: 500; color: var(--muted); }
+  select { width: 100%; min-height: 44px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--fg); font: inherit; }
+  .sample { font-size: 13px; color: var(--muted); margin-top: 4px; min-height: 1.5em; overflow-wrap: anywhere; }
+  .err { color: var(--bad); font-weight: 600; min-height: 1.5em; }
+  .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  .problems { margin: 8px 0 0; padding-left: 20px; font-size: 14px; color: var(--warn); }
+  .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; margin-top: 10px; max-height: 70vh; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; font-variant-numeric: tabular-nums; }
+  th, td { padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--soft); white-space: nowrap; }
+  th { position: sticky; top: 0; background: var(--panel); color: var(--muted); font-weight: 600; border-bottom: 1px solid var(--line); }
+  td.num, th.num { text-align: right; }
+  .pos { color: var(--ok); } .neg { color: var(--bad); }
+  footer { font-size: 13px; color: var(--muted); text-align: center; }
 </style>
 </head>
 <body>
 <main>
-  <h1>Edge Check</h1>
-  <p class="tag">Drop in your backtest trades. Find out if your edge is real.</p>
-  <div class="box">
-    <p><strong>Coming soon:</strong> load a CSV of your manual backtest trades and get your stats, a card for every trade, your equity curve, breakdowns by setup and session, and a stats card to post.</p>
-  </div>
-  <p class="lock">Your trades never leave your computer. Everything runs in your browser.</p>
+  <header>
+    <h1>Edge Check</h1>
+    <p class="tag">Drop in your backtest trades. Find out if your edge is real.</p>
+    <p class="lock">Your trades never leave your computer. Everything runs in your browser.</p>
+  </header>
+
+  <section class="card" aria-labelledby="load-h">
+    <h2 id="load-h">1. Load your trades</h2>
+    <p class="muted small">A CSV with one row per trade. From Excel: File → Save As → CSV UTF-8. From Google Sheets: File → Download → CSV.</p>
+    <div class="drop" id="drop">
+      <input type="file" id="file" accept=".csv,text/csv" class="sr">
+      <label for="file" class="btn">Choose CSV file</label>
+      <span class="muted small">or drop it here</span>
+    </div>
+    <p class="small">Starting from nothing? <a href="template.csv" download>Download the template CSV</a>, fill in your trades, and load it here.</p>
+    <p id="file-status" class="status" role="status" hidden></p>
+  </section>
+
+  <section class="card" id="match" aria-labelledby="match-h" hidden>
+    <h2 id="match-h">2. Match your columns</h2>
+    <p class="muted small">We guessed which of your columns is which from the header names. Check each one; the grey line under it shows values from your file.</p>
+    <div class="fields" id="fields"></div>
+    <p class="err" id="match-err" role="alert"></p>
+    <button type="button" class="btn" id="go">Show my trades</button>
+  </section>
+
+  <section class="card" id="trades" aria-labelledby="trades-h" hidden>
+    <div class="row" style="justify-content: space-between">
+      <h2 id="trades-h">3. Your trades</h2>
+      <button type="button" class="btn secondary" id="again">Load a different file</button>
+    </div>
+    <p id="summary" role="status"></p>
+    <ul class="problems" id="problems"></ul>
+    <div class="table-wrap"><table id="table"></table></div>
+  </section>
+
+  <footer>Edge Check · no uploads, no accounts, no tracking · <a href="https://github.com/Husker-Hedge/edge-check">source on GitHub</a></footer>
 </main>
+
+<script>
+(() => {
+  // ---------------------------------------------------------------- the columns Edge Check knows about
+  // score(h) rates how likely a header (lower-cased, punctuation turned into spaces) is this field. 0 = no.
+  const FIELDS = [
+    { key: 'r', label: 'R per trade', required: true, num: true, score: (h, w) =>
+        /\b(pre|planned|plan|target|expected|potential|risk|max)\b/.test(h) ? 0 :
+        h === 'r' ? 100 :
+        /^(outcome|result|realized|realised|net|pnl|p l|profit) r$|^r (outcome|result|multiple|net)$|^r multiple$|^rmultiple$/.test(h) ? 95 :
+        w.includes('r') && /outcome|result|realized|realised|net|pnl/.test(h) ? 90 :
+        w.includes('r') ? 60 : /^(outcome|result)$/.test(h) ? 20 : 0 },
+    { key: 'date', label: 'Date', score: (h) => h === 'date' ? 100 : /^(trade|entry|open) date$/.test(h) ? 95 :
+        /\bdate\b/.test(h) && !/update/.test(h) ? 70 : h === 'day' ? 50 : 0 },
+    { key: 'time', label: 'Time', score: (h) => /timeframe|\bitf\b|\btf\b/.test(h) ? 0 : h === 'time' ? 100 :
+        /^time\b/.test(h) || /^(entry|open) time\b/.test(h) ? 90 : /\btime\b/.test(h) && !/exit|close/.test(h) ? 60 : 0 },
+    { key: 'direction', label: 'Direction', score: (h) => /^(direction|side|long short|buy sell|dir|l s)$/.test(h) ? 100 :
+        /\bdirection\b/.test(h) ? 90 : h === 'position' ? 60 : 0 },
+    { key: 'grade', label: 'Grade', score: (h) => /\bgrade\b/.test(h) ? 100 : /^(quality|rating|setup quality)$/.test(h) ? 80 : 0 },
+    { key: 'mae', label: 'MAE', num: true, score: (h) => /^mae\b/.test(h) ? 100 : /max(imum)? adverse/.test(h) ? 80 : h === 'heat' ? 60 : 0 },
+    { key: 'mfe', label: 'MFE', num: true, score: (h) => /^mfe\b/.test(h) ? 100 : /max(imum)? favou?rable/.test(h) ? 80 : 0 },
+  ];
+  const HINT = { r: 'your result in R, e.g. 2 or −1', date: 'when the trade happened', time: 'entry time',
+                 direction: 'long or short', grade: 'e.g. A, B, C', mae: 'most it went against you, in R', mfe: 'most it went your way, in R' };
+
+  const $ = (id) => document.getElementById(id);
+  let file = null, headers = [], rows = [], mapping = {};
+
+  // ---------------------------------------------------------------- 1. reading the file (it stays on this computer)
+  $('file').addEventListener('change', (e) => { if (e.target.files[0]) load(e.target.files[0]); });
+  const drop = $('drop');
+  ['dragenter', 'dragover'].forEach((t) => drop.addEventListener(t, (e) => { e.preventDefault(); drop.classList.add('over'); }));
+  ['dragleave', 'drop'].forEach((t) => drop.addEventListener(t, (e) => { e.preventDefault(); drop.classList.remove('over'); }));
+  drop.addEventListener('drop', (e) => { if (e.dataTransfer.files[0]) load(e.dataTransfer.files[0]); });
+  $('again').addEventListener('click', () => { $('file').value = ''; $('file').click(); });
+
+  async function load(f) {
+    file = f;
+    const status = $('file-status');
+    status.hidden = false; status.classList.remove('bad');
+    let text;
+    try { text = await f.text(); } catch (err) { return fail('Couldn’t read that file.'); }
+    if (/^PK/.test(text.slice(0, 2))) return fail('That looks like an Excel file (.xlsx). Save it as CSV first: File → Save As → CSV UTF-8.');
+    const table = parseCSV(text.replace(/^﻿/, ''));
+    if (table.length < 2) return fail('That file has no rows under the header line.');
+    headers = uniqueHeaders(table[0]);
+    rows = table.slice(1);
+    status.textContent = `Read “${f.name}”: ${headers.length} columns, ${rows.length} rows under the header.`;
+    $('trades').hidden = true;
+    buildMatching();
+    $('match').hidden = false;
+    $('match').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+  function fail(msg) {
+    const s = $('file-status'); s.hidden = false; s.classList.add('bad'); s.textContent = msg;
+    $('match').hidden = true; $('trades').hidden = true;
+  }
+
+  // ---------------------------------------------------------------- parsing: text -> rows and cells
+  // Handles quoted cells (commas and line breaks inside quotes, "" for a quote), CRLF/LF/CR line endings,
+  // and comma, semicolon or tab separators (whichever the header line uses most).
+  function parseCSV(text) {
+    const first = text.split(/\r\n|\n|\r/, 1)[0];
+    const count = (ch) => first.split(ch).length - 1;
+    const sep = [',', ';', '\t'].sort((a, b) => count(b) - count(a))[0];
+    const out = []; let row = [], cell = '', quoted = false;
+    for (let i = 0; i < text.length; i++) {
+      const c = text[i];
+      if (quoted) {
+        if (c === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else quoted = false; }
+        else cell += c;
+      } else if (c === '"' && cell === '') quoted = true;
+      else if (c === sep) { row.push(cell); cell = ''; }
+      else if (c === '\n' || c === '\r') {
+        if (c === '\r' && text[i + 1] === '\n') i++;
+        row.push(cell); out.push(row); row = []; cell = '';
+      } else cell += c;
+    }
+    if (cell !== '' || row.length) { row.push(cell); out.push(row); }
+    return out;
+  }
+  function uniqueHeaders(h) {
+    const seen = {};
+    return h.map((x, i) => {
+      let name = x.trim() || `Column ${i + 1}`;
+      if (seen[name]) name = `${name} (${++seen[name]})`; else seen[name] = 1;
+      return name;
+    });
+  }
+  const norm = (h) => h.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+
+  // ---------------------------------------------------------------- 2. column matching
+  function guess() {
+    const pairs = [];
+    FIELDS.forEach((f) => headers.forEach((h, i) => {
+      const n = norm(h), s = f.score(n, n.split(' '));
+      if (s > 0) pairs.push({ f: f.key, i, s });
+    }));
+    pairs.sort((a, b) => b.s - a.s);
+    const map = {}, used = new Set();
+    pairs.forEach((p) => { if (!(p.f in map) && !used.has(p.i)) { map[p.f] = p.i; used.add(p.i); } });
+    return map;
+  }
+  function samples(i) {
+    const vals = [];
+    for (const r of rows) { const v = (r[i] || '').trim(); if (v) vals.push(v); if (vals.length === 3) break; }
+    return vals.length ? 'e.g. ' + vals.join(' · ') : 'this column is empty';
+  }
+  function buildMatching() {
+    mapping = guess();
+    const box = $('fields'); box.replaceChildren();
+    FIELDS.forEach((f) => {
+      const wrap = document.createElement('div'); wrap.className = 'field';
+      const label = document.createElement('label'); label.htmlFor = 'map-' + f.key;
+      label.append(f.label + ' ');
+      const badge = document.createElement('span'); badge.className = f.required ? 'req' : 'opt';
+      badge.textContent = f.required ? 'required' : 'optional'; label.append(badge);
+      const sel = document.createElement('select'); sel.id = 'map-' + f.key;
+      sel.append(new Option(f.required ? '— pick a column —' : '— not in my file —', ''));
+      headers.forEach((h, i) => sel.append(new Option(h, String(i))));
+      sel.value = f.key in mapping ? String(mapping[f.key]) : '';
+      const sample = document.createElement('div'); sample.className = 'sample';
+      const show = () => { sample.textContent = sel.value === '' ? HINT[f.key] : samples(+sel.value); };
+      sel.addEventListener('change', () => { if (sel.value === '') delete mapping[f.key]; else mapping[f.key] = +sel.value; show(); $('match-err').textContent = ''; });
+      show();
+      wrap.append(label, sel, sample); box.append(wrap);
+    });
+    $('match-err').textContent = '';
+  }
+
+  // ---------------------------------------------------------------- turning cells into values
+  function num(s) {
+    let t = (s || '').trim().replace(/−/g, '-');
+    if (!t) return null;
+    let neg = false;
+    if (/^\(.*\)$/.test(t)) { neg = true; t = t.slice(1, -1); }
+    t = t.replace(/[$,%\s]/g, '').replace(/r$/i, '');
+    if (!/^[-+]?(\d+\.?\d*|\.\d+)(e[-+]?\d+)?$/i.test(t)) return NaN;
+    const v = Number(t);
+    return neg ? -v : v;
+  }
+  function dateISO(s) {
+    const t = (s || '').trim(); let y, m, d, x;
+    if (!t) return '';
+    if ((x = t.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/))) [, y, m, d] = x;
+    else if ((x = t.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})\b/))) { [, m, d, y] = x; if (y.length === 2) y = '20' + y; }
+    else if (/^\d{5}(\.\d+)?$/.test(t)) {                       // an Excel date number, e.g. 45936
+      const dt = new Date(Date.UTC(1899, 11, 30) + Math.floor(+t) * 86400000);
+      return dt.toISOString().slice(0, 10);
+    } else return t;
+    return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+  }
+  const timeText = (s) => (s || '').trim().replace(/^(\d{1,2}:\d{2}):00(\s*[ap]m)?$/i, '$1$2');
+  function dirText(s) {
+    const t = (s || '').trim();
+    if (/^(l|long|buy|b)$/i.test(t)) return 'Long';
+    if (/^(s|short|sell)$/i.test(t)) return 'Short';
+    return t;
+  }
+
+  // ---------------------------------------------------------------- 3. the trades table
+  $('go').addEventListener('click', () => {
+    if (!('r' in mapping)) { $('match-err').textContent = 'Pick the column that holds your R per trade. Edge Check can’t count anything without it.'; return; }
+    const trades = [], problems = [];
+    let blankRows = 0, noR = 0;
+    rows.forEach((r, k) => {
+      const line = k + 2;                                   // the row number in the sheet (header = row 1)
+      if (r.every((c) => !c.trim())) { blankRows++; return; }
+      const R = num(r[mapping.r]);
+      if (R === null) { noR++; return; }
+      if (Number.isNaN(R)) { problems.push(`Row ${line}: R per trade is “${r[mapping.r].trim()}”, not a number. Left out.`); return; }
+      const t = { row: line, r: R };
+      if ('date' in mapping) t.date = dateISO(r[mapping.date]);
+      if ('time' in mapping) t.time = timeText(r[mapping.time]);
+      if ('direction' in mapping) t.direction = dirText(r[mapping.direction]);
+      if ('grade' in mapping) t.grade = (r[mapping.grade] || '').trim();
+      ['mae', 'mfe'].forEach((key) => {
+        if (!(key in mapping)) return;
+        const v = num(r[mapping[key]]);
+        if (Number.isNaN(v)) problems.push(`Row ${line}: ${key.toUpperCase()} is “${r[mapping[key]].trim()}”, not a number. Shown blank.`);
+        t[key] = Number.isNaN(v) ? null : v;
+      });
+      trades.push(t);
+    });
+    showTrades(trades, problems, blankRows, noR);
+  });
+
+  function showTrades(trades, problems, blankRows, noR) {
+    const skipped = [];
+    if (noR) skipped.push(`${noR} row${noR === 1 ? '' : 's'} with no R (not filled in yet)`);
+    if (blankRows) skipped.push(`${blankRows} empty row${blankRows === 1 ? '' : 's'}`);
+    $('summary').textContent = `${trades.length} trade${trades.length === 1 ? '' : 's'} read from “${file.name}”.` +
+      (skipped.length ? ` Skipped: ${skipped.join(', ')}.` : '') +
+      (problems.length ? ` ${problems.length} row${problems.length === 1 ? ' has a problem' : 's have problems'}, listed below.` : '');
+    const ul = $('problems'); ul.replaceChildren();
+    problems.slice(0, 20).forEach((p) => { const li = document.createElement('li'); li.textContent = p; ul.append(li); });
+    if (problems.length > 20) { const li = document.createElement('li'); li.textContent = `…and ${problems.length - 20} more.`; ul.append(li); }
+
+    const cols = [{ key: 'n', label: '#', num: true }, { key: 'row', label: 'Sheet row', num: true }]
+      .concat(['date', 'time', 'direction', 'grade'].filter((k) => k in mapping).map((k) => ({ key: k, label: FIELDS.find((f) => f.key === k).label })))
+      .concat([{ key: 'r', label: 'R', num: true }])
+      .concat(['mae', 'mfe'].filter((k) => k in mapping).map((k) => ({ key: k, label: k.toUpperCase(), num: true })));
+    const table = $('table'); table.replaceChildren();
+    const cap = document.createElement('caption'); cap.className = 'sr'; cap.textContent = 'Your trades, one row each'; table.append(cap);
+    const thead = table.createTHead().insertRow();
+    cols.forEach((c) => { const th = document.createElement('th'); th.scope = 'col'; th.textContent = c.label; if (c.num) th.className = 'num'; thead.append(th); });
+    const body = table.createTBody();
+    trades.forEach((t, i) => {
+      const tr = body.insertRow();
+      cols.forEach((c) => {
+        const td = tr.insertCell();
+        let v = c.key === 'n' ? i + 1 : t[c.key];
+        if (c.key === 'r') { td.className = 'num ' + (v > 0 ? 'pos' : v < 0 ? 'neg' : ''); v = (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v).toFixed(2); }
+        else if ((c.key === 'mae' || c.key === 'mfe') && v != null) { td.className = 'num'; v = v.toFixed(2); }
+        else if (c.num) td.className = 'num';
+        td.textContent = v == null ? '' : String(v);
+      });
+    });
+    $('trades').hidden = false;
+    $('trades').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+})();
+</script>
 </body>
 </html>
