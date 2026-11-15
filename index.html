@@ -53,6 +53,18 @@
   td.num, th.num { text-align: right; }
   .pos { color: var(--ok); } .neg { color: var(--bad); }
   footer { font-size: 13px; color: var(--muted); text-align: center; }
+  .controls { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: end; margin: 10px 0 4px; font-size: 14px; }
+  .controls label { display: flex; flex-direction: column; gap: 4px; font-weight: 600; }
+  .controls input { width: 110px; min-height: 44px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--fg); font: inherit; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; margin-top: 14px; }
+  .stat { border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; }
+  .stat .name { font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  .stat .value { font-size: 28px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.2; }
+  .stat .says { font-size: 14px; }
+  .stat details { font-size: 14px; color: var(--muted); }
+  .stat summary { cursor: pointer; color: var(--accent); min-height: 32px; display: flex; align-items: center; }
+  .stat details p { margin: 6px 0 0; white-space: pre-line; }
+  .note { margin-top: 14px; border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; font-size: 14px; }
 </style>
 </head>
 <body>
@@ -83,9 +95,22 @@
     <button type="button" class="btn" id="go">Show my trades</button>
   </section>
 
+  <section class="card" id="results" aria-labelledby="results-h" hidden>
+    <h2 id="results-h">3. Your stats</h2>
+    <p class="muted small">Every number is worked out from the trades below, in file order. Tap “What it means” on any card.</p>
+    <div class="controls">
+      <label for="from">From trade #<input type="number" id="from" min="1" step="1" inputmode="numeric"></label>
+      <label for="to">to trade #<input type="number" id="to" min="1" step="1" inputmode="numeric"></label>
+      <label for="usd">$ per R<input type="number" id="usd" min="0" step="50" value="500" inputmode="decimal"></label>
+    </div>
+    <p class="err" id="range-err" role="alert"></p>
+    <div class="stats" id="stats"></div>
+    <div class="note" id="costs-note"></div>
+  </section>
+
   <section class="card" id="trades" aria-labelledby="trades-h" hidden>
     <div class="row" style="justify-content: space-between">
-      <h2 id="trades-h">3. Your trades</h2>
+      <h2 id="trades-h">4. Your trades</h2>
       <button type="button" class="btn secondary" id="again">Load a different file</button>
     </div>
     <p id="summary" role="status"></p>
@@ -143,14 +168,14 @@
     headers = uniqueHeaders(table[0]);
     rows = table.slice(1);
     status.textContent = `Read “${f.name}”: ${headers.length} columns, ${rows.length} rows under the header.`;
-    $('trades').hidden = true;
+    $('trades').hidden = true; $('results').hidden = true;
     buildMatching();
     $('match').hidden = false;
     $('match').scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
   function fail(msg) {
     const s = $('file-status'); s.hidden = false; s.classList.add('bad'); s.textContent = msg;
-    $('match').hidden = true; $('trades').hidden = true;
+    $('match').hidden = true; $('trades').hidden = true; $('results').hidden = true;
   }
 
   // ---------------------------------------------------------------- parsing: text -> rows and cells
@@ -314,7 +339,120 @@
       });
     });
     $('trades').hidden = false;
-    $('trades').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    allTrades = trades;
+    $('from').value = 1; $('to').value = trades.length;
+    $('from').max = $('to').max = trades.length;
+    renderStats();
+    $('results').hidden = false;
+    $('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  // ---------------------------------------------------------------- 4. the stats, each with a plain-English card
+  // The four cards from the NQ Data project, in Payton's own words.
+  const MY_CARDS = {
+    expectancy: `Expectancy is what you can expect to make / lose per trade.  Its formula is (win rate x average win) - (loss rate x average loss).`,
+    pf: `Profit factor is similar to expectancy but the difference is that profit factor is the ratio of the two piles rather than per trade.  Profit factor is how much you win for every R lost.  above 1 is profitable, below 1 is unprofitable and exactly 1 is break even.`,
+    t: `T-statistic measures how many units of luck your average sits away from zero. The "2 rule" says you need a t of 2 or more (either direction) before you trust a result.  More trades matter because the smaller the edge the more data needed.  If you have a .2R true edge you need at least 100 trades to prove t>2.  t above 2 is strong evidence, but the more variations I test, the more likely one passes by luck, so the locked S6 has the final say.`,
+    costs: `When a signal on a 5-minute close actually fills it doesn't fill on the close, it fills on the open of the next candle.  A stop order becomes a market order once it reaches the designated price.  There are occurrences where a candle will gap over your order making the fill price worse than originally decided.  If a 1m bar hits both your stop and TP within the same bar we can't decide which side it hit first so we designate it as a loss as its better to be pessimistic than optimistic when backtesting.  One round trip costs $1.00 per contract on the lucid flex evals, $0.5 per side per contract, it is a flat rate.
+
+slippage is added on to the commission making my round trip cost $2.00 per contract.  Slippage in this instance is 1 tick in and 1 tick out (an additional $0.50 per contract per side)`,
+  };
+  let allTrades = [];
+  ['from', 'to', 'usd'].forEach((id) => $(id).addEventListener('input', renderStats));
+
+  const sum = (a) => a.reduce((s, x) => s + x, 0);
+  function computeStats(R) {
+    const n = R.length, wins = R.filter((x) => x > 0), losses = R.filter((x) => x < 0);
+    const total = sum(R), won = sum(wins), lost = -sum(losses), mean = n ? total / n : NaN;
+    const sd = n > 1 ? Math.sqrt(sum(R.map((x) => (x - mean) ** 2)) / (n - 1)) : NaN;
+    // Drawdown: walk the running total, remember its highest point (0R before trade 1 counts),
+    // and keep the deepest drop below that high.
+    let run = 0, high = 0, highAt = 0, dd = 0, ddFrom = 0, ddTo = 0;
+    R.forEach((x, i) => {
+      run += x;
+      if (run > high + 1e-9) { high = run; highAt = i + 1; }
+      if (run - high < dd - 1e-9) { dd = run - high; ddFrom = highAt; ddTo = i + 1; }
+    });
+    // Streaks: the most in a row. A 0R trade ends a streak either way.
+    const streak = (test) => {
+      let best = 0, cur = 0, end = 0;
+      R.forEach((x, i) => { cur = test(x) ? cur + 1 : 0; if (cur > best) { best = cur; end = i + 1; } });
+      return { len: best, from: end - best + 1, to: end };
+    };
+    return { n, wins: wins.length, losses: losses.length, scratches: n - wins.length - losses.length,
+      winRate: n ? wins.length / n : NaN, total, mean, won, lost,
+      pf: lost ? won / lost : (won ? Infinity : NaN),
+      avgWin: wins.length ? won / wins.length : NaN, avgLoss: losses.length ? -lost / losses.length : NaN,
+      dd, ddFrom, ddTo, winStreak: streak((x) => x > 0), lossStreak: streak((x) => x < 0),
+      t: sd > 0 ? mean / (sd / Math.sqrt(n)) : NaN };
+  }
+
+  const signed = (v, d) => (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v).toFixed(d);
+  const fR = (v, d = 2) => Number.isFinite(v) ? signed(v, d) + 'R' : '—';
+  const fUSD = (v) => Number.isFinite(v) ? (v < 0 ? '−' : '') + '$' + Math.round(Math.abs(v)).toLocaleString('en-US') : '—';
+  const plural = (k, word) => `${k} ${word}${k === 1 ? '' : 's'}`;
+
+  function renderStats() {
+    const N = allTrades.length, err = $('range-err');
+    const a = Math.round(+$('from').value), b = Math.round(+$('to').value), per = Math.max(0, +$('usd').value || 0);
+    if (!(a >= 1 && b <= N && a <= b)) { err.textContent = `Pick a range inside 1 to ${N}, with “from” no bigger than “to”.`; return; }
+    err.textContent = '';
+    const s = computeStats(allTrades.slice(a - 1, b).map((t) => t.r));
+    const at = (k) => a - 1 + k;                     // position inside the range -> trade # in the file
+    const usdNote = per ? ` About ${fUSD(s.total * per)} at $${per.toLocaleString('en-US')} per R.` : '';
+    const cards = [
+      { name: 'Trades', value: String(s.n), says: `Trades #${a} to #${b} of the ${N} in your file.`,
+        means: 'Every number on this page comes from these trades. With fewer than about 30, treat everything as a rough sketch: a few lucky or unlucky trades can swing it a lot.' },
+      { name: 'Wins and losses', value: `${s.wins} / ${s.losses}`,
+        says: `${plural(s.wins, 'win')}, ${plural(s.losses, 'loss').replace('losss', 'losses')}${s.scratches ? `, ${plural(s.scratches, 'scratch')} at 0R`.replace('scratchs', 'scratches') : ''}.`,
+        means: 'A win is any trade above 0R and a loss any trade below 0R. A trade of exactly 0R is a scratch: it counts as a trade but is neither a win nor a loss.' },
+      { name: 'Win rate', value: (100 * s.winRate).toFixed(1) + '%', says: `${(100 * s.winRate).toFixed(1)}% of trades were winners.`,
+        means: 'Win rate alone says nothing about money. A 30% win rate makes money if the winners average 3R; a 70% win rate loses money if one loser wipes out three winners. Read it next to the average win and loss.' },
+      { name: 'Total R', value: fR(s.total), says: `The whole set finished ${fR(s.total)}.${usdNote}`,
+        means: 'The sum of every trade’s R: how far ahead or behind all the trades finished together.' },
+      { name: 'Expectancy', value: fR(s.mean, 3),
+        says: `Each trade ${s.mean >= 0 ? 'made' : 'lost'} ${fR(Math.abs(s.mean), 3).replace('+', '')} on average${per ? `, about ${fUSD(Math.abs(s.mean) * per)} a trade at $${per.toLocaleString('en-US')} per R` : ''}.`,
+        means: MY_CARDS.expectancy },
+      { name: 'Profit factor', value: Number.isFinite(s.pf) ? s.pf.toFixed(2) : (s.pf === Infinity ? 'no losses' : '—'),
+        says: Number.isFinite(s.pf) ? `${s.pf.toFixed(2)}R won for every 1R lost (${fR(s.won)} won, ${fR(-s.lost)} lost).` : 'Needs at least one win and one loss.',
+        means: MY_CARDS.pf },
+      { name: 'Average win / loss', value: `${fR(s.avgWin)} / ${fR(s.avgLoss)}`,
+        says: `A typical winner made ${fR(s.avgWin)}; a typical loser lost ${fR(Math.abs(s.avgLoss)).replace('+', '')}.`,
+        means: 'How big a typical winner and loser are, in R. With the win rate they make expectancy: (win rate × average win) − (loss rate × average loss).' },
+      { name: 'Max drawdown', value: fR(s.dd),
+        says: s.dd === 0 ? 'The running total never dropped below an earlier high.' :
+          `${per ? fUSD(Math.abs(s.dd) * per) + ' below the high: ' : ''}from the high ${s.ddFrom ? `after trade #${at(s.ddFrom)}` : 'at the start'} to the low after trade #${at(s.ddTo)}.`,
+        means: 'Walk the running total of R and remember its highest point; the deepest drop below that high is the max drawdown. The count starts at 0R before the first trade, so an early losing run counts too. Order matters: the same trades in a different order give a different drawdown.' },
+      { name: 'Longest winning streak', value: String(s.winStreak.len),
+        says: s.winStreak.len ? `${plural(s.winStreak.len, 'win')} in a row: trades #${at(s.winStreak.from)} to #${at(s.winStreak.to)}.` : 'No winners yet.',
+        means: 'The most winners in a row. A 0R trade ends a streak.' },
+      { name: 'Longest losing streak', value: String(s.lossStreak.len),
+        says: s.lossStreak.len ? `${s.lossStreak.len} loss${s.lossStreak.len === 1 ? '' : 'es'} in a row: trades #${at(s.lossStreak.from)} to #${at(s.lossStreak.to)}.` : 'No losers yet.',
+        means: 'The most losers in a row. When you trade it live, expect a run at least this long; it doesn’t mean the strategy broke. A 0R trade ends a streak.' },
+      { name: 't-statistic', value: Number.isFinite(s.t) ? signed(s.t, 2) : '—',
+        says: !Number.isFinite(s.t) ? 'Needs at least 2 trades that aren’t all the same.' :
+          Math.abs(s.t) >= 2 ? `${signed(s.t, 2)} is 2 or more from zero: strong evidence the average isn’t just luck.` :
+          `${signed(s.t, 2)} is less than 2 from zero: this average could still be luck.`,
+        means: MY_CARDS.t },
+    ];
+    const box = $('stats'); box.replaceChildren();
+    cards.forEach((c) => {
+      const el = document.createElement('article'); el.className = 'stat';
+      const name = document.createElement('div'); name.className = 'name'; name.textContent = c.name;
+      const value = document.createElement('div'); value.className = 'value'; value.textContent = c.value;
+      const says = document.createElement('div'); says.className = 'says'; says.textContent = c.says;
+      const det = document.createElement('details');
+      const sum2 = document.createElement('summary'); sum2.textContent = 'What it means';
+      const p = document.createElement('p'); p.textContent = c.means;
+      det.append(sum2, p); el.append(name, value, says, det); box.append(el);
+    });
+    const note = $('costs-note'); note.replaceChildren();
+    const h = document.createElement('strong'); h.textContent = 'About costs. ';
+    const lead = document.createTextNode('Edge Check uses each trade’s R exactly as your file has it. If your Rs leave out commission and slippage, live results will come in lower. ');
+    const det = document.createElement('details');
+    const sm = document.createElement('summary'); sm.textContent = 'How fills and costs really work';
+    const p = document.createElement('p'); p.style.whiteSpace = 'pre-line'; p.textContent = MY_CARDS.costs;
+    det.append(sm, p); note.append(h, lead, det);
   }
 })();
 </script>
