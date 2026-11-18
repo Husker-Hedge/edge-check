@@ -65,6 +65,51 @@
   .stat summary { cursor: pointer; color: var(--accent); min-height: 32px; display: flex; align-items: center; }
   .stat details p { margin: 6px 0 0; white-space: pre-line; }
   .note { margin-top: 14px; border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; font-size: 14px; }
+
+  /* ---- charts: thin marks, hairline grid, text in text colours ---- */
+  .chart { position: relative; margin-top: 10px; touch-action: pan-y; }
+  .chart:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 8px; }
+  .chart svg { display: block; width: 100%; overflow: visible; }
+  .c-grid { stroke: var(--soft); stroke-width: 1; }
+  .c-zero { stroke: var(--line); stroke-width: 1; }
+  .c-axis { fill: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .c-line { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+  .c-dd { fill: var(--bad); opacity: .1; }
+  .c-label { fill: var(--muted); font-size: 12px; }
+  .c-end { fill: var(--fg); font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .c-cross { stroke: var(--muted); stroke-width: 1; }
+  .c-dot { fill: var(--accent); stroke: var(--panel); stroke-width: 2; }
+  .c-col { fill: var(--accent); }
+  .c-col.lift { opacity: .75; }
+  .tip { position: absolute; top: 0; left: 0; pointer-events: none; background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+         padding: 8px 10px; font-size: 13px; box-shadow: 0 2px 10px rgba(0,0,0,.14); min-width: 150px; max-width: 240px; z-index: 2; }
+  .tip strong { display: block; font-size: 15px; font-variant-numeric: tabular-nums; }
+  .tip span { display: block; color: var(--muted); }
+  tr.hit td { background: var(--soft); }
+  .split { margin-top: 20px; }
+  .split h3, .exc h3 { margin: 0 0 4px; font-size: 16px; }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; margin: 2px 0 8px; }
+  .seg button { min-height: 36px; padding: 0 12px; border: 0; background: transparent; color: var(--fg); font: inherit; font-size: 14px; cursor: pointer; }
+  .seg button + button { border-left: 1px solid var(--line); }
+  .seg button[aria-pressed="true"] { background: var(--fg); color: var(--bg); font-weight: 600; }
+  .seg button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  td.bar-cell { width: 180px; min-width: 120px; padding-top: 0; padding-bottom: 0; }
+  .track { position: relative; height: 12px; }
+  .track::before { content: ''; position: absolute; left: 50%; top: -6px; bottom: -6px; width: 1px; background: var(--line); }
+  .bar { position: absolute; top: 0; height: 12px; }
+  .bar.up { left: 50%; background: var(--accent); border-radius: 0 4px 4px 0; }
+  .bar.down { right: 50%; background: var(--bad); border-radius: 4px 0 0 4px; }
+  .chip { font-size: 11px; font-weight: 600; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 0 6px; margin-left: 6px; }
+  .stands { font-size: 14px; margin: 8px 0 0; }
+  .exc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-top: 16px; }
+  .exc details { font-size: 14px; margin-top: 6px; }
+  .exc summary { cursor: pointer; color: var(--accent); min-height: 32px; display: flex; align-items: center; }
+  @media (max-width: 560px) {
+    .split table { font-size: 13px; }
+    .split th, .split td { padding: 8px 6px; }
+    .split .mean, .split .bar-col { display: none; }
+    .chip { margin-left: 4px; padding: 0 4px; font-size: 10px; }
+  }
 </style>
 </head>
 <body>
@@ -108,9 +153,30 @@
     <div class="note" id="costs-note"></div>
   </section>
 
+  <section class="card" id="curve-card" aria-labelledby="curve-h" hidden>
+    <h2 id="curve-h">4. Equity curve</h2>
+    <p class="muted small">Your running total of R after each trade. The shaded stretch is the max drawdown. Hover or tap the line to read a trade; click it (or tap it twice) to jump to that trade in the table.</p>
+    <div class="chart" id="curve" tabindex="0" aria-describedby="curve-says"
+         aria-label="Equity curve. Left and right arrow keys move between trades; Enter shows the trade in the table."></div>
+    <p class="sr" id="curve-live" aria-live="polite"></p>
+    <p class="small" id="curve-says"></p>
+  </section>
+
+  <section class="card" id="splits-card" aria-labelledby="splits-h" hidden>
+    <h2 id="splits-h">5. Splits</h2>
+    <p class="muted small">The same trades, grouped. The line under each table names the group that made the most and any group that lost money, counting only groups of 5 or more trades. A split is an idea to test, not a new rule: slice enough ways and some group always looks best by luck alone.</p>
+    <div id="splits"></div>
+  </section>
+
+  <section class="card exc" id="exc-card" aria-labelledby="exc-h" hidden>
+    <h2 id="exc-h">6. MAE and MFE</h2>
+    <p class="muted small">MAE is the most a trade went against you before it closed; MFE is the most it went your way. Both are in R and read as sizes, so −0.16 and 0.16 both mean 0.16R. The winners’ MAE shows whether your stop is too tight; the losers’ MFE shows whether your target is too greedy.</p>
+    <div id="exc"></div>
+  </section>
+
   <section class="card" id="trades" aria-labelledby="trades-h" hidden>
     <div class="row" style="justify-content: space-between">
-      <h2 id="trades-h">4. Your trades</h2>
+      <h2 id="trades-h">7. Your trades</h2>
       <button type="button" class="btn secondary" id="again">Load a different file</button>
     </div>
     <p id="summary" role="status"></p>
@@ -168,14 +234,17 @@
     headers = uniqueHeaders(table[0]);
     rows = table.slice(1);
     status.textContent = `Read “${f.name}”: ${headers.length} columns, ${rows.length} rows under the header.`;
-    $('trades').hidden = true; $('results').hidden = true;
+    hideResults();
     buildMatching();
     $('match').hidden = false;
     $('match').scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
   function fail(msg) {
     const s = $('file-status'); s.hidden = false; s.classList.add('bad'); s.textContent = msg;
-    $('match').hidden = true; $('trades').hidden = true; $('results').hidden = true;
+    $('match').hidden = true; hideResults();
+  }
+  function hideResults() {
+    ['results', 'curve-card', 'splits-card', 'exc-card', 'trades'].forEach((id) => { $(id).hidden = true; });
   }
 
   // ---------------------------------------------------------------- parsing: text -> rows and cells
@@ -253,7 +322,7 @@
   // ---------------------------------------------------------------- turning cells into values
   function num(s) {
     let t = (s || '').trim().replace(/−/g, '-');
-    if (!t) return null;
+    if (!t || /^(n\/?a|none|-+|—|–)$/i.test(t)) return null;   // blank, N/A or a dash = not filled in
     let neg = false;
     if (/^\(.*\)$/.test(t)) { neg = true; t = t.slice(1, -1); }
     t = t.replace(/[$,%\s]/g, '').replace(/r$/i, '');
@@ -279,6 +348,26 @@
     if (/^(s|short|sell)$/i.test(t)) return 'Short';
     return t;
   }
+  // Entry time -> minutes after midnight, as the clock in the file reads (08:45, 8:45 AM, 13:05:00, or Excel's 0.364583).
+  function minutesOf(s) {
+    const t = (s || '').trim();
+    const x = t.match(/^(\d{1,2}):(\d{2})(?::\d{2}(?:\.\d+)?)?\s*([ap])?\.?\s*m?\.?$/i) ||
+              t.match(/\b(\d{1,2}):(\d{2})(?::\d{2})?\s*([ap](?=\.?m\b))?/i);
+    if (x) {
+      let h = +x[1]; const m = +x[2];
+      if (x[3]) { if (h === 12) h = 0; if (/p/i.test(x[3])) h += 12; }
+      return h <= 23 && m <= 59 ? h * 60 + m : null;
+    }
+    if (/^0?\.\d+$/.test(t)) return Math.round(+t * 1440) % 1440;
+    return null;
+  }
+  // A YYYY-MM-DD date -> 0 (Sunday) to 6 (Saturday); anything else -> null.
+  function weekdayOf(iso) {
+    const x = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || '');
+    if (!x) return null;
+    const d = new Date(Date.UTC(+x[1], +x[2] - 1, +x[3]));
+    return d.getUTCMonth() === +x[2] - 1 ? d.getUTCDay() : null;
+  }
 
   // ---------------------------------------------------------------- 3. the trades table
   $('go').addEventListener('click', () => {
@@ -292,8 +381,8 @@
       if (R === null) { noR++; return; }
       if (Number.isNaN(R)) { problems.push(`Row ${line}: R per trade is “${r[mapping.r].trim()}”, not a number. Left out.`); return; }
       const t = { row: line, r: R };
-      if ('date' in mapping) t.date = dateISO(r[mapping.date]);
-      if ('time' in mapping) t.time = timeText(r[mapping.time]);
+      if ('date' in mapping) { t.date = dateISO(r[mapping.date]); t.wd = weekdayOf(t.date); }
+      if ('time' in mapping) { t.time = timeText(r[mapping.time]); t.mins = minutesOf(r[mapping.time]); }
       if ('direction' in mapping) t.direction = dirText(r[mapping.direction]);
       if ('grade' in mapping) t.grade = (r[mapping.grade] || '').trim();
       ['mae', 'mfe'].forEach((key) => {
@@ -329,6 +418,7 @@
     const body = table.createTBody();
     trades.forEach((t, i) => {
       const tr = body.insertRow();
+      tr.id = 'tr-' + (i + 1);
       cols.forEach((c) => {
         const td = tr.insertCell();
         let v = c.key === 'n' ? i + 1 : t[c.key];
@@ -342,8 +432,10 @@
     allTrades = trades;
     $('from').value = 1; $('to').value = trades.length;
     $('from').max = $('to').max = trades.length;
+    const hasExc = 'mae' in mapping || 'mfe' in mapping;
+    $('trades-h').textContent = (hasExc ? '7' : '6') + '. Your trades';
+    $('results').hidden = false; $('curve-card').hidden = false; $('splits-card').hidden = false; $('exc-card').hidden = !hasExc;
     renderStats();
-    $('results').hidden = false;
     $('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
@@ -453,6 +545,324 @@ slippage is added on to the commission making my round trip cost $2.00 per contr
     const sm = document.createElement('summary'); sm.textContent = 'How fills and costs really work';
     const p = document.createElement('p'); p.style.whiteSpace = 'pre-line'; p.textContent = MY_CARDS.costs;
     det.append(sm, p); note.append(h, lead, det);
+
+    view = { a, b, s, slice: allTrades.slice(a - 1, b) };
+    renderCurve(); renderSplits(); renderExc();
+  }
+
+  // ---------------------------------------------------------------- small helpers for the charts (plain SVG, no library)
+  const SVGNS = 'http://www.w3.org/2000/svg';
+  function el(tag, attrs, parent) {
+    const e = document.createElementNS(SVGNS, tag);
+    for (const k in attrs) e.setAttribute(k, attrs[k]);
+    if (parent) parent.append(e);
+    return e;
+  }
+  function svgText(parent, x, y, text, cls, anchor = 'start') {
+    const t = el('text', { x, y, class: cls, 'text-anchor': anchor }, parent);
+    t.textContent = text;                                  // labels come from the file: always as text, never as HTML
+    return t;
+  }
+  // Round tick values (1, 2, 2.5 or 5 times a power of ten) covering lo..hi.
+  function ticks(lo, hi, want) {
+    const span = hi - lo || 1, raw = span / want, p = 10 ** Math.floor(Math.log10(raw));
+    const step = [1, 2, 2.5, 5, 10].map((k) => k * p).find((k) => k >= raw);
+    const out = [];
+    for (let v = Math.floor(lo / step) * step; v <= hi + step * 1e-9; v += step) out.push(+v.toFixed(10));
+    if (out[0] > lo + 1e-9) out.unshift(out[0] - step);
+    if (out[out.length - 1] < hi - 1e-9) out.push(+(out[out.length - 1] + step).toFixed(10));   // top tick at or above the highest value
+    return out;
+  }
+  const tickR = (v) => (v > 0 ? '+' : v < 0 ? '−' : '') + String(+Math.abs(v).toFixed(2)) + 'R';
+  function makeTip(box) {
+    const tip = document.createElement('div'); tip.className = 'tip'; tip.hidden = true;
+    const strong = document.createElement('strong'), l1 = document.createElement('span'), l2 = document.createElement('span');
+    tip.append(strong, l1, l2); box.append(tip);
+    return {
+      show(x, y, value, line1, line2) {
+        strong.textContent = value; l1.textContent = line1 || ''; l2.textContent = line2 || ''; l2.hidden = !line2;
+        tip.hidden = false;
+        const w = tip.offsetWidth, bw = box.clientWidth;
+        tip.style.left = Math.max(0, Math.min(x + 14 + w > bw ? x - 14 - w : x + 14, bw - w)) + 'px';
+        tip.style.top = Math.max(0, y) + 'px';
+      },
+      hide() { tip.hidden = true; },
+    };
+  }
+  let view = null;
+
+  // ---------------------------------------------------------------- 4. equity curve
+  let curveSel = null, curveW = 0;
+  function renderCurve() {
+    const box = $('curve'); if (!view) return;
+    const { a, b, s, slice } = view;
+    const W = Math.max(280, box.clientWidth), H = W < 520 ? 230 : 290;
+    curveW = box.clientWidth;
+    const m = { l: 52, r: 64, t: 14, b: 34 }, pw = W - m.l - m.r, ph = H - m.t - m.b;
+    const pts = [{ n: a - 1, total: 0 }]; let run = 0;
+    slice.forEach((t, i) => { run += t.r; pts.push({ n: a + i, total: run, t }); });
+    const ys = ticks(Math.min(0, ...pts.map((p) => p.total)), Math.max(0, ...pts.map((p) => p.total)), 4);
+    const y0 = ys[0], y1 = ys[ys.length - 1];
+    const X = (n) => m.l + (b === a - 1 ? 0 : (n - (a - 1)) / (b - (a - 1)) * pw);
+    const Y = (v) => m.t + (y1 - v) / (y1 - y0 || 1) * ph;
+
+    box.replaceChildren();
+    const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, height: H, 'aria-hidden': 'true' }, box);
+    ys.forEach((v) => {
+      el('line', { x1: m.l, x2: m.l + pw, y1: Y(v), y2: Y(v), class: v === 0 ? 'c-zero' : 'c-grid' }, svg);
+      svgText(svg, m.l - 8, Y(v) + 4, tickR(v), 'c-axis', 'end');
+    });
+    ticks(a, b, W < 520 ? 4 : 8).filter((n) => n >= a && n <= b && Number.isInteger(n)).forEach((n) =>
+      svgText(svg, X(n), H - 12, '#' + n, 'c-axis', 'middle'));
+    // the max drawdown: from the high (0 = the start of the range) to the low
+    if (s.dd < 0) {
+      const x1 = X(a - 1 + s.ddFrom), x2 = X(a - 1 + s.ddTo);
+      el('rect', { x: x1, y: m.t, width: Math.max(2, x2 - x1), height: ph, class: 'c-dd' }, svg);
+      const lab = `Max drawdown ${fR(s.dd, 1)}`;
+      if (x2 - x1 > lab.length * 6.6 + 8) svgText(svg, x1 + 6, m.t + 14, lab, 'c-label');
+    }
+    el('path', { d: pts.map((p, i) => `${i ? 'L' : 'M'}${X(p.n).toFixed(1)},${Y(p.total).toFixed(1)}`).join(''), class: 'c-line' }, svg);
+    const last = pts[pts.length - 1];
+    svgText(svg, X(last.n) + 8, Y(last.total) + 4, fR(last.total), 'c-end');
+
+    const cross = el('line', { y1: m.t, y2: m.t + ph, class: 'c-cross', visibility: 'hidden' }, svg);
+    const dot = el('circle', { r: 5, class: 'c-dot', visibility: 'hidden' }, svg);
+    const hit = el('rect', { x: m.l - 6, y: 0, width: pw + 12, height: H, fill: 'transparent' }, svg);
+    const tip = makeTip(box);
+    const scale = () => box.clientWidth / W;                // the svg is drawn at W wide, shown at the box's width
+    const show = (n) => {
+      if (n == null) { cross.setAttribute('visibility', 'hidden'); dot.setAttribute('visibility', 'hidden'); tip.hide(); return; }
+      const p = pts[n - (a - 1)];
+      cross.setAttribute('x1', X(n)); cross.setAttribute('x2', X(n)); cross.setAttribute('visibility', 'visible');
+      dot.setAttribute('cx', X(n)); dot.setAttribute('cy', Y(p.total)); dot.setAttribute('visibility', 'visible');
+      const what = [p.t.date, p.t.time, p.t.direction].filter(Boolean).join(' · ');
+      tip.show(X(n) * scale(), m.t * scale(), `${fR(p.total)} total`, `Trade #${n}: ${fR(p.t.r)}`, what);
+    };
+    const nearest = (e) => {
+      const r = svg.getBoundingClientRect(), px = (e.clientX - r.left) / scale();
+      return Math.min(b, Math.max(a, Math.round((a - 1) + (px - m.l) / pw * (b - (a - 1)))));
+    };
+    if (curveSel != null && (curveSel < a || curveSel > b)) curveSel = null;
+    hit.addEventListener('pointermove', (e) => { if (e.pointerType === 'mouse') show(nearest(e)); });
+    hit.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse') show(curveSel); });
+    hit.addEventListener('pointerup', (e) => {
+      const n = nearest(e);
+      if (e.pointerType !== 'mouse' && curveSel !== n) { curveSel = n; show(n); return; }   // first tap reads it
+      curveSel = n; show(n); jumpTo(n);                                                   // click, or second tap, jumps
+    });
+    box.onkeydown = (e) => {
+      const step = { ArrowLeft: -1, ArrowRight: 1, Home: -Infinity, End: Infinity }[e.key];
+      if (step !== undefined) {
+        e.preventDefault();
+        curveSel = Math.min(b, Math.max(a, (curveSel ?? (step > 0 ? a - 1 : b + 1)) + step));
+        show(curveSel);
+        const p = pts[curveSel - (a - 1)];
+        $('curve-live').textContent = `Trade ${curveSel}, ${fR(p.t.r)}, running total ${fR(p.total)}.`;
+      } else if (e.key === 'Enter' && curveSel != null) { e.preventDefault(); jumpTo(curveSel); }
+      else if (e.key === 'Escape') { curveSel = null; show(null); }
+    };
+    show(curveSel);
+
+    let hi = pts[0]; pts.forEach((p) => { if (p.total > hi.total + 1e-9) hi = p; });
+    $('curve-says').textContent = `From trade #${a} to #${b} the running total went from 0 to ${fR(last.total)}. ` +
+      (hi.n >= a ? `Its high was ${fR(hi.total)} after trade #${hi.n}. ` : 'It never got above 0R. ') +
+      (s.dd < 0 ? `The deepest drop below a high was ${fR(s.dd)}, from ${s.ddFrom ? `trade #${a - 1 + s.ddFrom}` : 'the start'} to trade #${a - 1 + s.ddTo}.` : 'It never dropped below an earlier high.');
+  }
+  function jumpTo(n) {
+    const row = $('tr-' + n); if (!row) return;
+    document.querySelectorAll('tr.hit').forEach((r) => r.classList.remove('hit'));
+    row.classList.add('hit');
+    row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+  let rz = 0;
+  new ResizeObserver(() => {
+    cancelAnimationFrame(rz);
+    rz = requestAnimationFrame(() => { if (view && $('curve').clientWidth !== curveW) { renderCurve(); renderExc(); } });
+  }).observe($('curve'));
+
+  // ---------------------------------------------------------------- 5. splits
+  const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const SMALL = 20, MIN_NAMED = 5;
+  let bucket = 30;
+  const hm = (x) => `${Math.floor(x / 60)}:${String(x % 60).padStart(2, '0')}`;
+  const dirRank = (v) => { const i = ['Long', 'Short'].indexOf(v); return i < 0 ? 2 : i; };
+  function renderSplits() {
+    const box = $('splits'); if (!view) return;
+    box.replaceChildren();
+    const dims = [];
+    if ('grade' in mapping) dims.push({ title: 'By grade', none: 'No grade', get: (t) => t.grade || null,
+      label: (k) => k, order: (x, y) => x.localeCompare(y, undefined, { numeric: true }) });
+    if ('time' in mapping) dims.push({ title: 'By entry time', none: 'No time', times: true,
+      get: (t) => t.mins == null ? null : Math.floor(t.mins / bucket) * bucket,
+      label: (k) => `${hm(k)}–${hm(k + bucket - 1)}`, order: (x, y) => x - y });
+    if ('date' in mapping) dims.push({ title: 'By day of the week', none: 'No date', get: (t) => t.wd ?? null,
+      label: (k) => DAYS[k], order: (x, y) => (x + 6) % 7 - (y + 6) % 7 });
+    if ('direction' in mapping) dims.push({ title: 'By direction', none: 'No direction', get: (t) => t.direction || null,
+      label: (k) => k, order: (x, y) => dirRank(x) - dirRank(y) || String(x).localeCompare(y) });
+    if (!dims.length) {
+      const p = document.createElement('p'); p.className = 'muted';
+      p.textContent = 'Match a grade, time, date or direction column in step 2 to split your trades by it.';
+      box.append(p); return;
+    }
+    dims.forEach((d) => {
+      const wrap = document.createElement('div'); wrap.className = 'split';
+      const h = document.createElement('h3'); h.textContent = d.title; wrap.append(h);
+      if (d.times) {
+        const seg = document.createElement('div'); seg.className = 'seg'; seg.setAttribute('role', 'group'); seg.setAttribute('aria-label', 'Group entry times by');
+        [[15, '15 min'], [30, '30 min'], [60, '1 hour']].forEach(([v, txt]) => {
+          const btn = document.createElement('button'); btn.type = 'button'; btn.textContent = txt;
+          btn.setAttribute('aria-pressed', String(v === bucket));
+          btn.addEventListener('click', () => { bucket = v; renderSplits(); box.querySelector('.seg [aria-pressed="true"]').focus(); });
+          seg.append(btn);
+        });
+        wrap.append(seg);
+      }
+      const groups = new Map(), none = [];
+      view.slice.forEach((t) => { const k = d.get(t); if (k == null) none.push(t.r); else { if (!groups.has(k)) groups.set(k, []); groups.get(k).push(t.r); } });
+      const list = [...groups.keys()].sort(d.order).map((k) => ({ name: d.label(k), R: groups.get(k) }));
+      if (none.length) list.push({ name: d.none, R: none, none: true });
+      list.forEach((g) => { const st = computeStats(g.R); Object.assign(g, { n: st.n, win: st.winRate, total: st.total, mean: st.mean }); });
+      const maxAbs = Math.max(...list.map((g) => Math.abs(g.total)), 1e-9);
+
+      const tw = document.createElement('div'); tw.className = 'table-wrap'; tw.style.maxHeight = 'none';
+      const table = document.createElement('table');
+      const cap = document.createElement('caption'); cap.className = 'sr'; cap.textContent = `Your trades ${d.title.toLowerCase()}`; table.append(cap);
+      const hr = table.createTHead().insertRow();
+      [['Group', ''], ['Trades', 'num'], ['Win rate', 'num'], ['Total R', 'num'], ['', ''], ['R per trade', 'num mean']].forEach(([txt, cls], i) => {
+        const th = document.createElement('th'); th.scope = 'col'; th.className = cls; th.textContent = txt;
+        if (i === 4) { th.className = 'bar-col'; const s2 = document.createElement('span'); s2.className = 'sr'; s2.textContent = 'Total R as a bar'; th.append(s2); }
+        hr.append(th);
+      });
+      const tb = table.createTBody();
+      list.forEach((g) => {
+        const tr = tb.insertRow(); if (g.none) tr.className = 'muted';
+        const c0 = tr.insertCell(); c0.textContent = g.name;
+        const c1 = tr.insertCell(); c1.className = 'num'; c1.textContent = String(g.n);
+        if (g.n < SMALL) { const chip = document.createElement('span'); chip.className = 'chip'; chip.textContent = 'small'; c1.append(chip); }
+        const c2 = tr.insertCell(); c2.className = 'num'; c2.textContent = (100 * g.win).toFixed(1) + '%';
+        const c3 = tr.insertCell(); c3.className = 'num ' + (g.total > 0 ? 'pos' : g.total < 0 ? 'neg' : ''); c3.textContent = fR(g.total);
+        const c4 = tr.insertCell(); c4.className = 'bar-cell bar-col';
+        const track = document.createElement('div'); track.className = 'track';
+        if (g.total !== 0) {
+          const bar = document.createElement('div'); bar.className = 'bar ' + (g.total > 0 ? 'up' : 'down');
+          bar.style.width = `max(2px, ${(Math.abs(g.total) / maxAbs * 50).toFixed(2)}%)`;
+          track.append(bar);
+        }
+        c4.append(track);
+        const c5 = tr.insertCell(); c5.className = 'num mean'; c5.textContent = fR(g.mean, 3);
+      });
+      tw.append(table); wrap.append(tw);
+
+      const named = list.filter((g) => !g.none && g.n >= MIN_NAMED);
+      const p = document.createElement('p'); p.className = 'stands';
+      if (named.length >= 2) {
+        const best = named.reduce((x, y) => (y.total > x.total ? y : x));
+        const losers = named.filter((g) => g.total < 0).sort((x, y) => x.total - y.total);
+        const say = (g) => `${g.name} (${fR(g.total)} over ${plural(g.n, 'trade')})`;
+        p.append(Object.assign(document.createElement('strong'), { textContent: 'Made the most: ' }), say(best) + '. ');
+        p.append(Object.assign(document.createElement('strong'), { textContent: losers.length ? 'Lost money: ' : 'Lost money: none' }),
+          losers.length ? losers.map(say).join('; ') + '.' : ' of the groups with 5 or more trades.');
+      } else p.textContent = 'Not enough groups with 5 or more trades to compare yet.';
+      wrap.append(p);
+      box.append(wrap);
+    });
+    const foot = document.createElement('p'); foot.className = 'muted small'; foot.style.marginTop = '12px';
+    foot.textContent = `Groups under ${SMALL} trades are marked “small”: a few lucky or unlucky trades can swing them.`;
+    box.append(foot);
+  }
+
+  // ---------------------------------------------------------------- 6. MAE and MFE
+  const median = (v) => { if (!v.length) return NaN; const s2 = [...v].sort((x, y) => x - y), k = s2.length >> 1; return s2.length % 2 ? s2[k] : (s2[k - 1] + s2[k]) / 2; };
+  const avg = (v) => (v.length ? sum(v) / v.length : NaN);
+  const fz = (v) => (Number.isFinite(v) ? v.toFixed(2) + 'R' : '—');
+  function renderExc() {
+    const box = $('exc'); if (!view || $('exc-card').hidden) return;
+    box.replaceChildren();
+    const size = (t, k) => (t[k] == null ? null : Math.abs(t[k]));
+    const W = view.slice.filter((t) => t.r > 0), L = view.slice.filter((t) => t.r < 0);
+    const keys = ['mae', 'mfe'].filter((k) => k in mapping);
+    const vals = (list, k) => list.map((t) => size(t, k)).filter((v) => v != null);
+
+    // summary table: winners, losers, every trade
+    const tw = document.createElement('div'); tw.className = 'table-wrap'; tw.style.maxHeight = 'none';
+    const table = document.createElement('table');
+    const cap = document.createElement('caption'); cap.className = 'sr'; cap.textContent = 'MAE and MFE for winners, losers and every trade'; table.append(cap);
+    const hr = table.createTHead().insertRow();
+    const heads = [['', ''], ['Trades', 'num']];
+    keys.forEach((k) => heads.push([`Avg ${k.toUpperCase()}`, 'num'], [`Median ${k.toUpperCase()}`, 'num']));
+    heads.forEach(([txt, cls]) => { const th = document.createElement('th'); th.scope = 'col'; th.className = cls; th.textContent = txt; hr.append(th); });
+    const tb = table.createTBody();
+    [['Winners', W], ['Losers', L], ['Every trade', view.slice]].forEach(([name, list]) => {
+      const tr = tb.insertRow();
+      tr.insertCell().textContent = name;
+      const c = tr.insertCell(); c.className = 'num'; c.textContent = String(list.length);
+      keys.forEach((k) => { const v = vals(list, k); [avg(v), median(v)].forEach((x) => { const td = tr.insertCell(); td.className = 'num'; td.textContent = fz(x); }); });
+    });
+    tw.append(table); box.append(tw);
+
+    const grid = document.createElement('div'); grid.className = 'exc-grid'; box.append(grid);
+    const missing = (list, k) => list.filter((t) => t[k] == null).length;
+    const charts = [];
+    if ('mae' in mapping) {
+      const v = vals(W, 'mae'), k8 = v.filter((x) => x >= 0.8).length;
+      charts.push(histogram(grid, 'Winners’ MAE: heat taken before they worked', v, 'winner',
+        !v.length ? 'No winners with an MAE yet.' :
+        (k8 ? `${k8} of ${plural(v.length, 'winner')} went 0.8R or more against you before ${k8 === 1 ? 'it' : 'they'} worked; a stop 20% tighter would have stopped ${k8 === 1 ? 'it' : 'them'} out. `
+            : `None of your ${plural(v.length, 'winner')} went 0.8R or more against you before working. `) +
+        `Half took less than ${fz(median(v))}, and the most any winner took was ${fz(Math.max(...v))}.` +
+        (missing(W, 'mae') ? ` ${plural(missing(W, 'mae'), 'winner')} with no MAE in the file ${missing(W, 'mae') === 1 ? 'is' : 'are'} left out.` : '')));
+    }
+    if ('mfe' in mapping) {
+      const v = vals(L, 'mfe'), k1 = v.filter((x) => x >= 1).length, k5 = v.filter((x) => x >= 0.5).length;
+      charts.push(histogram(grid, 'Losers’ MFE: best open profit before they lost', v, 'loser',
+        !v.length ? 'No losers with an MFE yet.' :
+        (k1 ? `${k1} of ${plural(v.length, 'loser')} ${k1 === 1 ? 'was' : 'were'} up +1R or more before ${k1 === 1 ? 'it' : 'they'} lost, and ${k5} reached +0.5R. ` +
+              `A +1R target would have turned at most ${k1} of them into winners.`
+            : `None of your ${plural(v.length, 'loser')} got to +1R before losing, and ${k5} reached +0.5R. A smaller target of +1R would have saved none of them.`) +
+        (missing(L, 'mfe') ? ` ${plural(missing(L, 'mfe'), 'loser')} with no MFE in the file ${missing(L, 'mfe') === 1 ? 'is' : 'are'} left out.` : '')));
+    }
+    charts.forEach((draw) => draw());                      // drawn once both are on the page, so each knows its real width
+  }
+  // Columns of 0.1R: 0–0.1, 0.1–0.2 … 0.9–1.0, then 1.0R or more.
+  function histogram(parent, title, values, noun, says) {
+    const wrap = document.createElement('div');
+    const h = document.createElement('h3'); h.textContent = title; wrap.append(h);
+    const box = document.createElement('div'); box.className = 'chart'; wrap.append(box);
+    const p = document.createElement('p'); p.className = 'small'; p.style.margin = '8px 0 0'; p.textContent = says; wrap.append(p);
+    parent.append(wrap);
+    const counts = new Array(11).fill(0);
+    values.forEach((v) => { counts[Math.min(10, Math.floor(v * 10 + 1e-9))]++; });
+    const name = (i) => (i === 10 ? '1.0R or more' : `${(i / 10).toFixed(1)}–${((i + 1) / 10).toFixed(1)}R`);
+    // the same counts as a table, so nothing needs a hover to read
+    const det = document.createElement('details'), sm = document.createElement('summary'); sm.textContent = 'Counts by size';
+    const t = document.createElement('table'), hrow = t.createTHead().insertRow();
+    ['Size', `${noun[0].toUpperCase()}${noun.slice(1)}s`].forEach((x, i) => { const th = document.createElement('th'); th.scope = 'col'; th.textContent = x; if (i) th.className = 'num'; hrow.append(th); });
+    const tb = t.createTBody();
+    counts.forEach((c, i) => { const tr = tb.insertRow(); tr.insertCell().textContent = name(i); const td = tr.insertCell(); td.className = 'num'; td.textContent = String(c); });
+    det.append(sm, t); wrap.append(det);
+    return () => {
+      const Wd = Math.max(260, box.clientWidth || 300), H = 170, m = { l: 30, r: 6, t: 10, b: 26 }, pw = Wd - m.l - m.r, ph = H - m.t - m.b;
+      const ys = ticks(0, Math.max(1, ...counts), 3).filter((v) => Number.isInteger(v)), top = ys[ys.length - 1];
+      const svg = el('svg', { viewBox: `0 0 ${Wd} ${H}`, height: H, 'aria-hidden': 'true' }, box);
+      const Y = (v) => m.t + (top - v) / top * ph, band = pw / 11, cw = Math.min(24, band - 4);
+      ys.forEach((v) => { el('line', { x1: m.l, x2: m.l + pw, y1: Y(v), y2: Y(v), class: v === 0 ? 'c-zero' : 'c-grid' }, svg); svgText(svg, m.l - 6, Y(v) + 4, String(v), 'c-axis', 'end'); });
+      [0, 2, 4, 6, 8].forEach((i) => svgText(svg, m.l + i * band, H - 8, (i / 10).toFixed(1), 'c-axis', 'middle'));
+      svgText(svg, m.l + 10.5 * band, H - 8, '1R+', 'c-axis', 'middle');
+      const tip = makeTip(box), sc = () => box.clientWidth / Wd;
+      counts.forEach((c, i) => {
+        const x = m.l + i * band + (band - cw) / 2;
+        let col = null;
+        if (c) {
+          const y = Y(c), r = Math.min(4, (m.t + ph - y) / 2);
+          col = el('path', { class: 'c-col', d: `M${x},${m.t + ph}V${y + r}Q${x},${y} ${x + r},${y}H${x + cw - r}Q${x + cw},${y} ${x + cw},${y + r}V${m.t + ph}Z` }, svg);
+        }
+        const hit = el('rect', { x: m.l + i * band, y: m.t, width: band, height: ph, fill: 'transparent' }, svg);
+        const on = () => { if (col) col.classList.add('lift'); tip.show((m.l + (i + 0.5) * band) * sc(), (m.t) * sc(), plural(c, noun), name(i)); };
+        const off = () => { if (col) col.classList.remove('lift'); tip.hide(); };
+        hit.addEventListener('pointerenter', on); hit.addEventListener('pointerleave', off);
+        hit.addEventListener('pointerdown', (e) => { if (e.pointerType !== 'mouse') on(); });
+      });
+    };
   }
 })();
 </script>
