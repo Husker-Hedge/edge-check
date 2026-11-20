@@ -104,6 +104,10 @@
   .exc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-top: 16px; }
   .exc details { font-size: 14px; margin-top: 6px; }
   .exc summary { cursor: pointer; color: var(--accent); min-height: 32px; display: flex; align-items: center; }
+  .share { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 16px; }
+  .share h3 { margin: 0 0 4px; font-size: 16px; }
+  .controls input#card-title { width: 280px; max-width: 100%; }
+  #card { display: block; width: 100%; max-width: 480px; height: auto; border-radius: 12px; border: 1px solid var(--line); margin: 14px 0 12px; }
   @media (max-width: 560px) {
     .split table { font-size: 13px; }
     .split th, .split td { padding: 8px 6px; }
@@ -151,6 +155,22 @@
     <p class="err" id="range-err" role="alert"></p>
     <div class="stats" id="stats"></div>
     <div class="note" id="costs-note"></div>
+
+    <div class="share" aria-labelledby="card-h">
+      <h3 id="card-h">Stats card</h3>
+      <p class="muted small">A square picture of these results (1080 × 1080) to post. It uses the trades in the range above, and your browser paints it: nothing is uploaded.</p>
+      <div class="controls">
+        <label for="card-title">Title on the card<input type="text" id="card-title" value="Backtest results" maxlength="60" autocomplete="off"></label>
+        <button type="button" class="btn" id="card-make">Make stats card</button>
+      </div>
+      <div id="card-out" hidden>
+        <canvas id="card" width="1080" height="1080" role="img"></canvas>
+        <div class="row">
+          <button type="button" class="btn" id="card-save">Save PNG</button>
+          <button type="button" class="btn secondary" id="card-share" hidden>Share</button>
+        </div>
+      </div>
+    </div>
   </section>
 
   <section class="card" id="curve-card" aria-labelledby="curve-h" hidden>
@@ -244,7 +264,7 @@
     $('match').hidden = true; hideResults();
   }
   function hideResults() {
-    ['results', 'curve-card', 'splits-card', 'exc-card', 'trades'].forEach((id) => { $(id).hidden = true; });
+    ['results', 'curve-card', 'splits-card', 'exc-card', 'trades', 'card-out'].forEach((id) => { $(id).hidden = true; });
   }
 
   // ---------------------------------------------------------------- parsing: text -> rows and cells
@@ -548,6 +568,7 @@ slippage is added on to the commission making my round trip cost $2.00 per contr
 
     view = { a, b, s, slice: allTrades.slice(a - 1, b) };
     renderCurve(); renderSplits(); renderExc();
+    if (!$('card-out').hidden) drawCard();                 // an open card follows the range
   }
 
   // ---------------------------------------------------------------- small helpers for the charts (plain SVG, no library)
@@ -864,6 +885,95 @@ slippage is added on to the commission making my round trip cost $2.00 per contr
       });
     };
   }
+
+  // ---------------------------------------------------------------- the stats card: a 1080 × 1080 PNG painted on a canvas
+  // A canvas is a grid of pixels. Each command paints over what is already there, so the background goes first.
+  // x counts right from the left edge; y counts DOWN from the top, so a bigger R needs a smaller y.
+  const CARD = { bg: '#14171c', fg: '#f1f3f6', muted: '#9aa3b2', line: '#2f3642', accent: '#8aa2f5', wash: 'rgba(138, 162, 245, 0.14)' };
+  const FONT = '-apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif';
+  const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const monthOf = (iso) => { const x = /^(\d{4})-(\d{2})/.exec(iso || ''); return x ? `${MONTHS[+x[2] - 1]} ${x[1]}` : null; };
+  // Paint text at x, y, shrinking the font until it fits inside maxW.
+  function paintText(ctx, text, x, y, size, weight, color, maxW) {
+    let px = size;
+    do { ctx.font = `${weight} ${px}px ${FONT}`; px -= 2; } while (px > 12 && ctx.measureText(text).width > maxW);
+    ctx.fillStyle = color; ctx.fillText(text, x, y);
+  }
+  function drawCard() {
+    if (!view) return;
+    const { s, slice } = view, c = $('card'), ctx = c.getContext('2d'), S = 1080, M = 80, W = S - 2 * M;
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+
+    // 1. the background, painted first
+    ctx.fillStyle = CARD.bg; ctx.fillRect(0, 0, S, S);
+
+    // 2. title, then the trade count and the months the trades cover
+    const title = $('card-title').value.trim() || 'Backtest results';
+    const dates = slice.map((t) => t.date).filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d || '')).sort();
+    const from = monthOf(dates[0]), to = monthOf(dates[dates.length - 1]);
+    const sub = plural(s.n, 'trade') + (from ? ` · ${from === to ? from : `${from} – ${to}`}` : '');
+    paintText(ctx, title, M, 140, 46, 600, CARD.fg, W);
+    paintText(ctx, sub, M, 196, 32, 400, CARD.muted, W);
+
+    // 3. the headline: total R
+    paintText(ctx, 'Total R', M, 304, 32, 500, CARD.muted, W);
+    paintText(ctx, fR(s.total), M, 458, 168, 700, CARD.fg, W);
+
+    // 4. win rate and profit factor, side by side
+    const pf = Number.isFinite(s.pf) ? s.pf.toFixed(2) : (s.pf === Infinity ? 'No losses' : '—');
+    [['Win rate', (100 * s.winRate).toFixed(1) + '%', M], ['Profit factor', pf, M + W / 2]].forEach(([label, value, x]) => {
+      paintText(ctx, label, x, 546, 30, 500, CARD.muted, W / 2 - 20);
+      paintText(ctx, value, x, 630, 84, 600, CARD.fg, W / 2 - 20);
+    });
+
+    // 5. the equity curve: the running total after each trade, 0R at the start
+    const top = 702, bottom = 930;
+    const pts = [0]; let run = 0;
+    slice.forEach((t) => { run += t.r; pts.push(run); });
+    const lo = Math.min(0, ...pts), hi = Math.max(0, ...pts), span = hi - lo || 1;
+    const X = (i) => M + i / (pts.length - 1 || 1) * W;
+    const Y = (v) => bottom - (v - lo) / span * (bottom - top);     // the flip: v = hi lands on top, v = lo on bottom
+    ctx.beginPath();                                                  // a pale wash between the curve and 0R
+    pts.forEach((v, i) => (i ? ctx.lineTo(X(i), Y(v)) : ctx.moveTo(X(i), Y(v))));
+    ctx.lineTo(X(pts.length - 1), Y(0)); ctx.lineTo(X(0), Y(0)); ctx.closePath();
+    ctx.fillStyle = CARD.wash; ctx.fill();
+    ctx.strokeStyle = CARD.line; ctx.lineWidth = 2;                   // the 0R line
+    ctx.beginPath(); ctx.moveTo(M, Y(0)); ctx.lineTo(M + W, Y(0)); ctx.stroke();
+    ctx.strokeStyle = CARD.accent; ctx.lineWidth = 5; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    ctx.beginPath();
+    pts.forEach((v, i) => (i ? ctx.lineTo(X(i), Y(v)) : ctx.moveTo(X(i), Y(v))));
+    ctx.stroke();
+    const ex = X(pts.length - 1), ey = Y(pts[pts.length - 1]);           // a dot on the last trade, ringed in the background colour
+    ctx.beginPath(); ctx.arc(ex, ey, 11, 0, Math.PI * 2); ctx.fillStyle = CARD.bg; ctx.fill();
+    ctx.beginPath(); ctx.arc(ex, ey, 8, 0, Math.PI * 2); ctx.fillStyle = CARD.accent; ctx.fill();
+
+    // 6. the small line naming the tool, painted last
+    paintText(ctx, 'Made with Edge Check · husker-hedge.github.io/edge-check', M, 1012, 26, 400, CARD.muted, W);
+
+    c.setAttribute('aria-label', `Stats card. ${title}. ${sub}. Total R ${fR(s.total)}. Win rate ${(100 * s.winRate).toFixed(1)}%. Profit factor ${pf}.`);
+  }
+  // canvas -> PNG bytes, made in the browser
+  const cardPNG = () => new Promise((done) => $('card').toBlob(done, 'image/png'));
+  $('card-make').addEventListener('click', () => {
+    $('card-out').hidden = false; drawCard();
+    $('card-make').textContent = 'Redraw stats card';
+    $('card').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  });
+  $('card-title').addEventListener('input', () => { if (!$('card-out').hidden) drawCard(); });
+  $('card-save').addEventListener('click', async () => {
+    const blob = await cardPNG(), a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = 'edge-check-stats.png';
+    document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  });
+  // On phones (and Safari) the share sheet can hand the PNG straight to X or Photos.
+  try {
+    if (navigator.canShare && navigator.canShare({ files: [new File([''], 'x.png', { type: 'image/png' })] })) $('card-share').hidden = false;
+  } catch (e) { /* no share sheet here; Save PNG still works */ }
+  $('card-share').addEventListener('click', async () => {
+    const file = new File([await cardPNG()], 'edge-check-stats.png', { type: 'image/png' });
+    try { await navigator.share({ files: [file] }); } catch (e) { /* closed the share sheet */ }
+  });
 })();
 </script>
 </body>
